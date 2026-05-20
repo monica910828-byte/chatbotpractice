@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, User, Bot, Loader2, RefreshCw } from 'lucide-react';
-import { sendMessage, type Message } from '../api/chat';
+import { sendMessageStream, type Message } from '../api/chat';
 
 const Chatbot: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
@@ -28,14 +28,48 @@ const Chatbot: React.FC = () => {
     setInput('');
     setIsLoading(true);
 
+    let started = false;
     try {
-      const reply = await sendMessage(newMessages);
-      setMessages([...newMessages, { role: 'assistant', content: reply }]);
+      await sendMessageStream(newMessages, (chunk) => {
+        if (!started) {
+          started = true;
+          setIsLoading(false);
+          setMessages((prev) => [...prev, { role: 'assistant', content: chunk }]);
+        } else {
+          setMessages((prev) => {
+            const updated = [...prev];
+            const lastIdx = updated.length - 1;
+            if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
+              updated[lastIdx] = {
+                ...updated[lastIdx],
+                content: updated[lastIdx].content + chunk,
+              };
+            }
+            return updated;
+          });
+        }
+      });
     } catch (error) {
-      setMessages([
-        ...newMessages,
-        { role: 'assistant', content: '죄송합니다. 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' }
-      ]);
+      console.error('Streaming error:', error);
+      if (!started) {
+        setIsLoading(false);
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: '죄송합니다. 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' }
+        ]);
+      } else {
+        setMessages((prev) => {
+          const updated = [...prev];
+          const lastIdx = updated.length - 1;
+          if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
+            updated[lastIdx] = {
+              ...updated[lastIdx],
+              content: updated[lastIdx].content + '\n\n[오류가 발생하여 답변 생성 중 중단되었습니다.]',
+            };
+          }
+          return updated;
+        });
+      }
     } finally {
       setIsLoading(false);
     }

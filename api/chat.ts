@@ -31,7 +31,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const response = await openai.chat.completions.create({
+    res.writeHead(200, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+
+    const stream = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
@@ -39,12 +46,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ],
       temperature: 0.7,
       max_tokens: 500,
+      stream: true,
     });
 
-    const reply = response.choices[0].message.content;
-    return res.status(200).json({ reply });
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || '';
+      if (content) {
+        res.write(content);
+      }
+    }
+
+    res.end();
   } catch (error: any) {
     console.error('OpenAI API Error:', error);
-    return res.status(500).json({ error: 'Internal Server Error', message: error.message });
+    // If headers have already been sent, we cannot change status or send json error
+    if (!res.headersSent) {
+      return res.status(500).json({ error: 'Internal Server Error', message: error.message });
+    }
+    res.end();
   }
 }

@@ -29,7 +29,7 @@ export default defineConfig(({ mode }) => {
                     apiKey: process.env.OPENAI_API_KEY || env.OPENAI_API_KEY,
                   });
 
-                  const response = await openai.chat.completions.create({
+                  const stream = await openai.chat.completions.create({
                     model: 'gpt-4o-mini',
                     messages: [
                       {
@@ -50,14 +50,32 @@ export default defineConfig(({ mode }) => {
                       },
                       ...messages,
                     ],
+                    stream: true,
                   });
 
-                  res.setHeader('Content-Type', 'application/json');
-                  res.end(JSON.stringify({ reply: response.choices[0].message.content }));
+                  res.writeHead(200, {
+                    'Content-Type': 'text/plain; charset=utf-8',
+                    'Cache-Control': 'no-cache, no-transform',
+                    'Connection': 'keep-alive',
+                    'X-Accel-Buffering': 'no',
+                  });
+
+                  for await (const chunk of stream) {
+                    const content = chunk.choices[0]?.delta?.content || '';
+                    if (content) {
+                      res.write(content);
+                    }
+                  }
+
+                  res.end();
                 } catch (error: any) {
                   console.error('API Middleware Error:', error);
-                  res.statusCode = 500;
-                  res.end(JSON.stringify({ error: 'Internal Error', message: error.message }));
+                  if (!res.headersSent) {
+                    res.statusCode = 500;
+                    res.end(JSON.stringify({ error: 'Internal Error', message: error.message }));
+                  } else {
+                    res.end();
+                  }
                 }
               });
             } else {
