@@ -8,6 +8,7 @@ const Chatbot: React.FC = () => {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -18,14 +19,17 @@ const Chatbot: React.FC = () => {
     scrollToBottom();
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleSend = async (customText?: string) => {
+    const textToSend = customText !== undefined ? customText : input;
+    if (!textToSend.trim() || isLoading) return;
 
-    const userMessage: Message = { role: 'user', content: input };
+    const userMessage: Message = { role: 'user', content: textToSend };
     const newMessages = [...messages, userMessage];
     
     setMessages(newMessages);
-    setInput('');
+    if (customText === undefined) {
+      setInput('');
+    }
     setIsLoading(true);
 
     let started = false;
@@ -75,6 +79,17 @@ const Chatbot: React.FC = () => {
     }
   };
 
+  const handleTopicSelect = (topic: string) => {
+    setSelectedTopic(topic);
+  };
+
+  const handleDifficultySelect = (difficulty: string) => {
+    if (!selectedTopic) return;
+    const formattedContent = `주제: ${selectedTopic}\n난이도: ${difficulty}\n\n위 조건에 맞는 영어 단어 퀴즈를 시작해줘.`;
+    setSelectedTopic(null);
+    handleSend(formattedContent);
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -92,7 +107,10 @@ const Chatbot: React.FC = () => {
           <h1>영단어 퀴즈 봇</h1>
           <p>오늘의 단어 3개를 학습해보세요!</p>
         </div>
-        <button className="reset-btn" onClick={() => setMessages([{ role: 'assistant', content: '어떤 주제나 난이도로 공부하고 싶으신가요?' }])} title="대화 초기화">
+        <button className="reset-btn" onClick={() => {
+          setMessages([{ role: 'assistant', content: '어떤 주제나 난이도로 공부하고 싶으신가요?' }]);
+          setSelectedTopic(null);
+        }} title="대화 초기화">
           <RefreshCw size={18} />
         </button>
       </header>
@@ -123,6 +141,51 @@ const Chatbot: React.FC = () => {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Suggestions flow */}
+      {!isLoading && (
+        <div className="suggestions-bar">
+          {!selectedTopic ? (
+            <div className="suggestion-group">
+              <span className="suggestion-label">주제 추천:</span>
+              <div className="suggestion-buttons">
+                {['일상 회화', '비즈니스 영어', '공항/여행 영어', '토익/수능 필수 단어'].map((topic) => (
+                  <button
+                    key={topic}
+                    className="suggestion-chip"
+                    onClick={() => handleTopicSelect(topic)}
+                  >
+                    {topic}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="suggestion-group">
+              <span className="suggestion-label">
+                난이도 선택 <strong className="selected-topic-badge">[{selectedTopic}]</strong>:
+              </span>
+              <div className="suggestion-buttons">
+                {['초급', '중급', '고급'].map((difficulty) => (
+                  <button
+                    key={difficulty}
+                    className="suggestion-chip difficulty"
+                    onClick={() => handleDifficultySelect(difficulty)}
+                  >
+                    {difficulty}
+                  </button>
+                ))}
+                <button
+                  className="suggestion-chip cancel"
+                  onClick={() => setSelectedTopic(null)}
+                >
+                  이전으로
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="input-area">
         <textarea
           value={input}
@@ -132,7 +195,7 @@ const Chatbot: React.FC = () => {
           rows={1}
         />
         <button 
-          onClick={handleSend} 
+          onClick={() => handleSend()} 
           disabled={isLoading || !input.trim()}
           className="send-btn"
         >
@@ -345,6 +408,84 @@ const Chatbot: React.FC = () => {
         .send-btn:disabled {
           opacity: 0.5;
           cursor: not-allowed;
+        }
+
+        .suggestions-bar {
+          padding: 0.75rem 1.25rem;
+          border-top: 1px solid var(--border);
+          background: rgba(99, 102, 241, 0.02);
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+
+        .suggestion-group {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.4rem;
+        }
+
+        .suggestion-label {
+          font-size: 0.8rem;
+          color: var(--text-muted);
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
+        }
+
+        .selected-topic-badge {
+          color: var(--primary);
+          font-weight: 600;
+        }
+
+        .suggestion-buttons {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+          width: 100%;
+        }
+
+        .suggestion-chip {
+          background: var(--bg-main);
+          border: 1px solid var(--border);
+          color: var(--text-main);
+          padding: 6px 12px;
+          border-radius: 20px;
+          font-size: 0.85rem;
+          cursor: pointer;
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          font-weight: 500;
+        }
+
+        .suggestion-chip:hover {
+          border-color: var(--primary);
+          background: rgba(99, 102, 241, 0.1);
+          color: var(--primary);
+          transform: translateY(-1px);
+        }
+
+        .suggestion-chip.difficulty {
+          background: rgba(99, 102, 241, 0.05);
+          border-color: rgba(99, 102, 241, 0.2);
+        }
+
+        .suggestion-chip.difficulty:hover {
+          background: var(--primary);
+          color: white;
+          border-color: var(--primary);
+        }
+
+        .suggestion-chip.cancel {
+          background: transparent;
+          border: 1px dashed var(--text-muted);
+          color: var(--text-muted);
+        }
+
+        .suggestion-chip.cancel:hover {
+          background: rgba(239, 68, 68, 0.1);
+          color: #ef4444;
+          border-color: #ef4444;
         }
       `}</style>
     </div>
